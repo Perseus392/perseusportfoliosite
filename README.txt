@@ -22,6 +22,6 @@ HOST FREE ON GITHUB PAGES
 
 VR
   Open the site in the Quest browser and an "Enter VR" button appears.
-  Move like Gorilla Tag. Right stick = snap turn. The blue ledge is slippery.
+  Move like Gorilla Tag. Right stick = snap turn. Grip button = grab / throw objects.
   Tune the feel at the top of the GorillaPlayer constructor in gorilla.js
   (same names as your Unity inspector values).

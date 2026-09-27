@@ -58,7 +58,9 @@ export class GorillaPlayer {
       maxJumpSpeed: 6.5, jumpMultiplier: 1.1, defaultSlideFactor: 0.03, slideControl: 0.00425,
       stickDepth: 0.008, iceThreshold: 0.95, tapHapticDuration: 0.05, tapHapticStrength: 0.5,
       slideHapticStrength: 0.075, tapCoolDown: 0.15, headRadius: 0.0924, bodyRadius: 0.14, bodyHeight: 0.5,
-      fixedDelta: 0.02, gravity: -9.81, disableMovement: false
+      fixedDelta: 0.02, gravity: -9.81, disableMovement: false, groundFriction: 2.0,
+      // impact SFX: min hand speed into the surface, hand must be off the surface this long / this far to re-arm
+      tapMinImpact: 0.35, tapMaxImpact: 2.5, tapRearmTime: 0.08, tapRearmDistance: 0.03
     }, p);
     this.rig = rig; this.world = world; this.input = input;
     this.vel = V();
@@ -97,6 +99,9 @@ export class GorillaPlayer {
     this.slideNormal = [V(0,1,0), V(0,1,0)]; this.slipPct = [0, 0];
     this.touching = [false, false]; this.lastTap = [0, 0]; this.slipPlaying = [false, false];
     this.didAJump = false; this.didATurn = false;
+    this.prevRaw = [this.lastHand[0].clone(), this.lastHand[1].clone()];
+    this.handVel = [V(), V()]; this.armed = [true, true]; this.offSince = [0, 0];
+    this.contactPoint = [this.lastHand[0].clone(), this.lastHand[1].clone()];
     this.followers = [this.lastHand[0].clone(), this.lastHand[1].clone()];
   }
 
@@ -119,6 +124,7 @@ export class GorillaPlayer {
   physicsStep(dt) {
     this.vel.y += this.gravity * dt;
     this.rig.position.addScaledVector(this.vel, dt);
+    let grounded = false;
     const resolve = (c, r) => {
       const p = V();
       for (const b of this.world.cols) {
@@ -137,6 +143,7 @@ export class GorillaPlayer {
         }
         this.rig.position.addScaledVector(n, pen); c.addScaledVector(n, pen);
         const vn = this.vel.dot(n); if (vn < 0) this.vel.addScaledVector(n, -vn);
+        if (n.y > 0.7) grounded = true;
       }
     };
     for (let it = 0; it < 2; it++) {
@@ -148,6 +155,11 @@ export class GorillaPlayer {
           resolve(this.headPos().add(V(0, -off, 0)), r);
         }
       }
+    }
+    // Ground friction (Unity's default physic material has friction; the MVP had none -> body slid on flat ground)
+    if (grounded) {
+      const h = Math.hypot(this.vel.x, this.vel.z);
+      if (h > 0) { const k = Math.max(0, h - this.groundFriction * 9.81 * dt) / h; this.vel.x *= k; this.vel.z *= k; }
     }
   }
 
@@ -170,6 +182,7 @@ export class GorillaPlayer {
     let dt = t - this.lastRealTime; this.lastRealTime = t;
     if (dt > 0.1) dt = 0.05;
     this.calcDeltaTime = dt;
+    for (let i = 0; i < 2; i++) { const r = this.currentHandPosition(i); this.handVel[i].copy(r).sub(this.prevRaw[i]).divideScalar(dt || 1e-3); this.prevRaw[i] = r; }
     const pos = this.rig.position, dva = this.denormalizedVelocityAverage, san = this.slideAverageNormal;
 
     if (!this.didAJump && (this.wasTouching[0] || this.wasTouching[1])) {
@@ -264,15 +277,28 @@ export class GorillaPlayer {
     this.bodyColliderUpdate();
 
     const time = performance.now() / 1000;
+    // Impact SFX (replaces "play on every contact"):
+    //  - fires only on a contact START, with the hand moving INTO the surface faster than tapMinImpact
+    //  - volume + haptic strength scale with impact speed, pitch is randomised slightly
+    //  - hysteresis: a hand must leave the surface for tapRearmTime AND tapRearmDistance before it can tap again,
+    //    so resting / jittering / dragging hands stay silent. Cooldown from the original is kept on top.
     for (let i = 0; i < 2; i++) {
-      const sliding = this.wasSlide[i] || this.slide[i], touchingNow = this.wasTouching[i];
-      if (!sliding && touchingNow && !this.touching[i] && time > this.lastTap[i] + this.tapCoolDown) {
-        this.input.tapSound?.(i); this.input.haptic?.(i, this.tapHapticStrength, this.tapHapticDuration); this.lastTap[i] = time;
-      } else if (sliding) {
-        if (!this.slipPlaying[i]) { this.slipPlaying[i] = true; this.input.slipSound?.(i, true); }
-        this.input.haptic?.(i, this.slideHapticStrength, this.fixedDelta);
+      const touchingNow = this.wasTouching[i];
+      if (touchingNow && !this.touching[i]) {
+        const impact = -this.handVel[i].dot(norm(this.slideNormal[i]));
+        if (this.armed[i] && impact > this.tapMinImpact && time > this.lastTap[i] + this.tapCoolDown) {
+          const k = THREE.MathUtils.clamp((impact - this.tapMinImpact) / (this.tapMaxImpact - this.tapMinImpact), 0, 1);
+          this.input.tapSound?.(i, 0.15 + 0.85 * k);
+          this.input.haptic?.(i, this.tapHapticStrength * (0.4 + 0.6 * k), this.tapHapticDuration);
+          this.lastTap[i] = time;
+        }
+        this.armed[i] = false; this.contactPoint[i].copy(this.lastHand[i]);
       }
-      if (!sliding && this.slipPlaying[i]) { this.slipPlaying[i] = false; this.input.slipSound?.(i, false); }
+      if (touchingNow) this.offSince[i] = 0;
+      else {
+        if (!this.offSince[i]) this.offSince[i] = time;
+        if (time - this.offSince[i] > this.tapRearmTime && this.lastHand[i].distanceTo(this.contactPoint[i]) > this.tapRearmDistance) this.armed[i] = true;
+      }
       this.touching[i] = touchingNow;
     }
   }
