@@ -5,8 +5,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const HIDDEN = /_Hidden\b|_Hidden_|_Hidden$/i;
 const ICE = /_Ice\b|_Ice_|_Ice$/i;
-const GRIP = /_Grip\b|_Grip_|_Grip$/i, NOCLIMB = /_NoClimb\b|_NoClimb_|_NoClimb$/i;
-const metaFor = name => ({ slip: ICE.test(name) ? 0.99 : undefined, grip: GRIP.test(name), noClimb: NOCLIMB.test(name) });
+const GRIP = /_Grip\b|_Grip_|_Grip$/i, NOCLIMB = /_NoClimb\b|_NoClimb_|_NoClimb$/i, NOHOOK = /_NoHook\b|_NoHook_|_NoHook$/i;
+const metaFor = name => ({ slip: ICE.test(name) ? 0.99 : undefined, grip: GRIP.test(name), noClimb: NOCLIMB.test(name), noHook: NOHOOK.test(name) });
 
 // World-space grid shader: depth cues on every surface. Used for any material whose name starts with "Grid".
 export const gridMat = (base = new THREE.Color(0xf2f2ef)) => new THREE.ShaderMaterial({

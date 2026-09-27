@@ -24,6 +24,7 @@ Name modifiers (put anywhere after the prefix):
 | `_Ice` | Slippery surface (the ported slide code). Sliding is off unless you use this. |
 | `_Grip` | Grip-climbable from **every** side, including tops: bars, rungs, branches, ledges. |
 | `_NoClimb` | Never grip-climbable (Gorilla movement still works on it). |
+| `_NoHook` | The hookshot can't attach to it. |
 
 - A prefix applies to the **whole object and its children**: a `Col_Rock` parent with 3 child meshes makes 3 mesh colliders.
 - Unity's duplicate suffixes are fine: `ColBox_Pillar (3)` still works.
@@ -47,6 +48,14 @@ Name modifiers (put anywhere after the prefix):
 - Grabbables win: grip near a grabbable picks it up instead of climbing.
 - Tuning: `reach` and `maxClimbNormalY` in `js/climb.js`; `pinWeight` (how much the gripping hand dominates a pushing free hand; lower = free hand pushes you around more) and `maxFling` at the top of the GorillaPlayer constructor in `js/gorilla.js`.
 - The starter room has a climbing playground behind the spawn (turn around): a jungle gym with a ladder and monkey bars, a 4 m climbing tower, trees with hang-able branches, boulders and a small mountain.
+
+## Hookshot
+
+- `Grab_Hookshot` (starter room: on the blue-grey stand near the playground). Pick it up, **trigger** fires along the barrel (15 m).
+- Hit: you're reeled in, then hang at the point while trigger is held. Release mid-pull to keep your momentum and fling; release while hanging to drop (or grab the wall and climb).
+- Needs child empties `Muzzle` (fires along its blue Z arrow) and `GrabPoint`. Tuning (`range`, `pullSpeed`, `standOff`) at the top of `interactables/Hookshot.js`.
+- The starter room has three floating platforms only the hookshot can reach.
+- Scripts can pull the player the same way: set `api.player.pull = { vel }` each frame, `null` to stop.
 
 ## Materials
 

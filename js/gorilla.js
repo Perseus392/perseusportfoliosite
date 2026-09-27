@@ -28,6 +28,9 @@ export class GorillaPlayer {
       tapMinImpact: 0.35, tapMaxImpact: 2.5, tapRearmTime: 0.08, tapRearmDistance: 0.03
     }, p);
     this.rig = rig; this.world = world; this.input = input;
+    // External pull (hookshot etc.): { vel: Vector3 } overrides velocity + gravity each physics step.
+    // While pulling, free hands slide along surfaces instead of anchoring you, and jumps are suppressed.
+    this.pull = null;
     this.vel = V();
     this.body = { radius: this.bodyRadius, height: this.bodyHeight, active: true };
     this.bodyLerp = 0.17;
@@ -88,7 +91,8 @@ export class GorillaPlayer {
 
   // Unity Rigidbody stand-in: gravity + head sphere & body capsule collisions.
   physicsStep(dt) {
-    if (!this.anyPinned()) this.vel.y += this.gravity * dt;
+    if (this.pull) this.vel.copy(this.pull.vel);
+    else if (!this.anyPinned()) this.vel.y += this.gravity * dt;
     this.rig.position.addScaledVector(this.vel, dt);
     let grounded = false;
     const resolve = (c, r) => {
@@ -137,7 +141,8 @@ export class GorillaPlayer {
     for (let i = 0; i < 2; i++) { const r = this.currentHandPosition(i); this.handVel[i].copy(r).sub(this.prevRaw[i]).divideScalar(dt || 1e-3); this.prevRaw[i] = r; }
     const pos = this.rig.position, dva = this.denormalizedVelocityAverage, san = this.slideAverageNormal;
 
-    if (!this.didAJump && !this.anyPinned() && (this.wasTouching[0] || this.wasTouching[1])) {
+    if (this.pull) for (let i = 0; i < 2; i++) if (!this.pins[i]) this.wasTouching[i] = false;   // don't let a touching hand hold you back
+    if (!this.didAJump && !this.anyPinned() && !this.pull && (this.wasTouching[0] || this.wasTouching[1])) {
       pos.addScaledVector(DOWN, 4.9 * dt * dt);
       if (dva.dot(san) <= 0 && DOWN.dot(san) <= 0)
         pos.sub(project(san.clone().multiplyScalar(Math.min(this.stickDepth, project(dva, san).length() * dt)), DOWN));
@@ -203,7 +208,7 @@ export class GorillaPlayer {
     }
 
     const D = this.denormalizedVelocityAverage;
-    if ((this.colliding[0] || this.colliding[1]) && !this.disableMovement && !this.didATurn && !this.anyPinned()) {
+    if ((this.colliding[0] || this.colliding[1]) && !this.disableMovement && !this.didATurn && !this.anyPinned() && !this.pull) {
       if (this.slide[0] || this.slide[1]) {
         const S = this.slideAverageNormal, pd = project(D, S).length();
         if (pd > this.slideVelocityLimit && D.dot(S) > 0 && pd > project(this.slideAverage, S).length()) {

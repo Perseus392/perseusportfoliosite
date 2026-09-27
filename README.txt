@@ -35,4 +35,5 @@ TEST LOCALLY
 VR CONTROLS
   Gorilla Tag movement. Right stick = snap turn.
   Grip = grab / throw objects, or hold grip against a wall to climb (hand turns orange).
+  Hookshot: pick it up, trigger = fire + reel in, hold trigger to hang, release to drop / fling.
   Trigger, A/X, B/Y = interactable actions while holding.

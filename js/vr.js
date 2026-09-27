@@ -112,7 +112,7 @@ export async function prepareVR(data) {
   // grabbables + interactables
   let registry = {};
   try { registry = (await import('../interactables/index.js')).default; } catch (e) { console.warn('no interactables', e); }
-  const api = { THREE, scene, player, haptic, sound: tap };
+  const api = { THREE, scene, player, phys, haptic, sound: tap };
   for (const g of room.grabbables) {
     g.start = { p: g.node.position.clone(), q: g.node.quaternion.clone() };
     g.localBox = new THREE.Box3().setFromObject(g.node)
@@ -194,7 +194,7 @@ export async function prepareVR(data) {
     if (Math.abs(ax) > 0.7 && snapReady && !climber.active) { player.turn(ax > 0 ? -45 : 45); snapReady = false; }
     if (Math.abs(ax) < 0.3) snapReady = true;
     player.update();                              // Gorilla movement + pinned (climbing) hands, one solver
-    if (rig.position.y < spawnPos.y - 30) { climber.releaseAll(); resetRig(); player.vel.set(0, 0, 0); player.initializeValues(); }
+    if (rig.position.y < spawnPos.y - 30) { climber.releaseAll(); player.pull = null; resetRig(); player.vel.set(0, 0, 0); player.initializeValues(); }
 
     const now = performance.now() / 1000, dt = Math.min(now - (lastT ?? now), 0.05); lastT = now;
     updateHands(now);
