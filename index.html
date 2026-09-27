@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Christopher Marshall C</title>
+<style>
+  :root { --bg:#f6f6f4; --card:#fff; --ink:#151515; --muted:#666; --line:#e2e2de; --accent:#ff5a1f; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:var(--bg);
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:32px 32px; }
+  main { max-width:1100px; margin:0 auto; padding:48px 16px 80px; }
+  h1 { font-size:clamp(2rem,6vw,3.4rem); line-height:1.05; margin:0 0 6px; letter-spacing:-.02em; }
+  .role { color:var(--muted); margin:0 0 20px; font-weight:500; }
+  .bio { max-width:680px; margin:0 0 16px; }
+  .highlight { display:inline-block; background:var(--ink); color:#fff; padding:8px 12px; border-radius:6px; font-size:.92rem; margin-bottom:18px; }
+  .links a, .card a.btn { display:inline-block; margin:0 8px 8px 0; padding:6px 12px; border:1px solid var(--ink); border-radius:999px; color:var(--ink); text-decoration:none; font-size:.9rem; background:#fff; }
+  .links a:hover, .card a.btn:hover { background:var(--ink); color:#fff; }
+  #vrBtn { display:none; margin:8px 0 0; padding:12px 20px; font:600 1rem system-ui; border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; margin-top:40px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; }
+  .card.open { grid-column:1/-1; }
+  .tag { font-size:.75rem; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); font-weight:700; }
+  .card h2 { margin:4px 0 6px; font-size:1.35rem; }
+  .card p { margin:0 0 12px; color:#333; }
+  .more { background:none; border:0; padding:0; font:600 .9rem system-ui; color:var(--ink); cursor:pointer; text-decoration:underline; }
+  .detail { display:none; margin-top:12px; }
+  .card.open .detail { display:block; }
+  .detail ul { padding-left:20px; margin:0 0 12px; }
+  .detail li { margin-bottom:6px; }
+  .media { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:10px; margin:12px 0; }
+  .media img, .media video, .media iframe { width:100%; aspect-ratio:16/9; border:0; border-radius:8px; background:#000; object-fit:cover; display:block; }
+  .media figcaption { font-size:.85rem; color:var(--muted); }
+  .card.always-open .more { display:none; }
+  @media (max-width:500px) { main { padding-top:32px; } .grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="name"></h1>
+    <p class="role" id="role"></p>
+    <p class="bio" id="bio"></p>
+    <div class="highlight" id="highlight"></div>
+    <div class="links" id="contact"></div>
+    <button id="vrBtn">Enter VR</button>
+  </header>
+  <section class="grid" id="grid"></section>
+</main>
+
+<script src="content.js"></script>
+<script>
+  const D = window.PORTFOLIO, $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  $('name').textContent = D.name; $('role').textContent = D.role;
+  $('bio').textContent = D.bio; $('highlight').textContent = D.highlight;
+  $('contact').innerHTML = D.contact.map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('');
+
+  const mediaHTML = m => m.type === 'image' ? `<figure style="margin:0"><img src="${esc(m.src)}" alt="${esc(m.caption||'')}" loading="lazy">${m.caption?`<figcaption>${esc(m.caption)}</figcaption>`:''}</figure>`
+    : m.type === 'video' ? `<video src="${esc(m.src)}" autoplay muted loop playsinline></video>`
+    : `<iframe src="https://www.youtube-nocookie.com/embed/${esc(m.id)}" loading="lazy" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>`;
+
+  $('grid').innerHTML = D.cards.map((c, i) => {
+    const onlyMedia = !c.points.length;
+    return `<article class="card${onlyMedia ? ' open always-open' : ''}">
+      <div class="tag">${esc(c.tag)}</div><h2>${esc(c.title)}</h2><p>${esc(c.summary)}</p>
+      <button class="more" data-i="${i}">Read more</button>
+      <div class="detail">
+        ${c.points.length ? `<ul>${c.points.map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
+        ${c.media.length ? `<div class="media">${c.media.map(mediaHTML).join('')}</div>` : ''}
+        ${c.links.map(l => `<a class="btn" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)} ↗</a>`).join('')}
+      </div></article>`;
+  }).join('');
+  $('grid').addEventListener('click', e => {
+    const b = e.target.closest('.more'); if (!b) return;
+    const card = b.closest('.card'); card.classList.toggle('open');
+    b.textContent = card.classList.contains('open') ? 'Close' : 'Read more';
+  });
+</script>
+
+<!-- VR: only loads Three.js on devices that support immersive VR (Quest browser) -->
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+<script type="module">
+  if (navigator.xr && await navigator.xr.isSessionSupported('immersive-vr').catch(() => false)) {
+    const { enterVR } = await import('./vr.js');
+    const btn = document.getElementById('vrBtn');
+    btn.style.display = 'inline-block';
+    btn.onclick = () => enterVR(window.PORTFOLIO);
+  }
+</script>
+</body>
+</html>
