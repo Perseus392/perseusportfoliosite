@@ -37,7 +37,7 @@ export async function prepareVR(data) {
   const roomName = new URLSearchParams(location.search).get('room') || 'room';
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight);
-  renderer.xr.enabled = true; renderer.xr.setFoveation(0);   // foveation made fine grid lines show a rectangular seam
+  renderer.xr.enabled = true; renderer.xr.setFoveation(1);
   renderer.domElement.style.cssText = 'position:fixed;inset:0;z-index:10;display:none';
   document.body.appendChild(renderer.domElement);
 

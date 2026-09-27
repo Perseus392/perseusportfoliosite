@@ -79,14 +79,22 @@
   });
 </script>
 
-<!-- VR: only loads Three.js on devices that support immersive VR (Quest browser) -->
-<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+<!-- VR: only loads Three.js + physics on devices that support immersive VR (Quest browser) -->
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+  "@dimforge/rapier3d-compat": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.14.0/rapier.es.js"
+} }</script>
 <script type="module">
   if (navigator.xr && await navigator.xr.isSessionSupported('immersive-vr').catch(() => false)) {
-    const { enterVR } = await import('./vr.js');
     const btn = document.getElementById('vrBtn');
-    btn.style.display = 'inline-block';
-    btn.onclick = () => enterVR(window.PORTFOLIO);
+    btn.style.display = 'inline-block'; btn.disabled = true; btn.textContent = 'Loading VR…';
+    try {
+      const { prepareVR } = await import('./js/vr.js');
+      const vr = await prepareVR(window.PORTFOLIO);
+      btn.disabled = false; btn.textContent = 'Enter VR';
+      btn.onclick = () => vr.start().catch(e => { console.error(e); alert('Could not start VR: ' + e.message); });
+    } catch (e) { console.error(e); btn.textContent = 'VR failed to load'; }
   }
 </script>
 </body>
