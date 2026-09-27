@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { GorillaPlayer } from './gorilla.js';
 import { createPhysics } from './physics.js';
 import { loadRoom } from './room.js';
+import { Climber } from './climb.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const FLIP = new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), Math.PI);   // GrabPoint +Z -> controller grip -Z
@@ -37,7 +38,7 @@ export async function prepareVR(data) {
   const roomName = new URLSearchParams(location.search).get('room') || 'room';
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight);
-  renderer.xr.enabled = true; renderer.xr.setFoveation(1);
+  renderer.xr.enabled = true; renderer.xr.setFoveation(0);   // foveation made fine grid lines show a rectangular seam
   renderer.domElement.style.cssText = 'position:fixed;inset:0;z-index:10;display:none';
   document.body.appendChild(renderer.domElement);
 
@@ -48,7 +49,7 @@ export async function prepareVR(data) {
   const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.03, 200); rig.add(camera);
 
   const phys = await createPhysics();
-  const room = await loadRoom(`rooms/${roomName}.glb`, scene, phys);
+  const room = await loadRoom(`rooms/${roomName}.glb?v=${window.BUILD || ''}`, scene, phys);
 
   // cards on Card_N markers (readable side faces the marker's +Z)
   room.cards.forEach((marker, i) => {
@@ -59,7 +60,7 @@ export async function prepareVR(data) {
   });
   if (room.banner) {
     const s = room.banner.getWorldScale(V());
-    const tex = cardTexture({ tag: data.role, title: data.name, summary: data.highlight, points: [] }, 2048, 700);
+    const tex = cardTexture({ tag: data.role + (window.BUILD ? '   ·   build ' + window.BUILD : ''), title: data.name, summary: data.highlight, points: [] }, 2048, 700);
     const bm = new THREE.Mesh(new THREE.PlaneGeometry(4.4 * s.x, 1.5 * s.y), new THREE.MeshBasicMaterial({ map: tex }));
     room.banner.getWorldPosition(bm.position); room.banner.getWorldQuaternion(bm.quaternion); scene.add(bm);
   }
@@ -105,6 +106,7 @@ export async function prepareVR(data) {
     haptic, tapSound: (i, vol) => tap(vol)
   };
   const player = new GorillaPlayer(rig, phys, input);
+  const climber = new Climber(player, phys);
   const handQuatWorld = i => rig.quaternion.clone().multiply(input.handQuat(i));
 
   // grabbables + interactables
@@ -177,6 +179,9 @@ export async function prepareVR(data) {
         g.body.setNextKinematicTranslation(t.p); g.body.setNextKinematicRotation(t.q);
         g.hist.push({ p: t.p, q: t.q, t: now }); if (g.hist.length > 6) g.hist.shift();
       }
+      // grip climbing: grip held + empty hand + touching a climbable surface -> anchor (grabbables take priority)
+      if (pressed(1) && !held[i] && !near && !climber.isAnchored(i) && climber.tryAttach(i)) haptic(i, 0.4, 0.05);
+      if (!pressed(1) && climber.isAnchored(i)) climber.release(i);
       btnWas[i] = b.map(x => x.pressed);
     }
   }
@@ -186,10 +191,10 @@ export async function prepareVR(data) {
     const pose = xrFrame && xrFrame.getViewerPose(renderer.xr.getReferenceSpace());
     if (pose) headLocal.copy(pose.transform.position);
     const ax = pads[1]?.axes?.[2] ?? 0;                   // snap turn, right stick
-    if (Math.abs(ax) > 0.7 && snapReady) { player.turn(ax > 0 ? -45 : 45); snapReady = false; }
+    if (Math.abs(ax) > 0.7 && snapReady && !climber.active) { player.turn(ax > 0 ? -45 : 45); snapReady = false; }
     if (Math.abs(ax) < 0.3) snapReady = true;
-    player.update();
-    if (rig.position.y < spawnPos.y - 30) { resetRig(); player.vel.set(0, 0, 0); player.initializeValues(); }
+    player.update();                              // Gorilla movement + pinned (climbing) hands, one solver
+    if (rig.position.y < spawnPos.y - 30) { climber.releaseAll(); resetRig(); player.vel.set(0, 0, 0); player.initializeValues(); }
 
     const now = performance.now() / 1000, dt = Math.min(now - (lastT ?? now), 0.05); lastT = now;
     updateHands(now);
@@ -205,7 +210,10 @@ export async function prepareVR(data) {
       for (const m of g.mats) m.emissive.setScalar(lit);
       call(g, 'update', dt);
     }
-    handMesh[0].position.copy(player.followers[0]); handMesh[1].position.copy(player.followers[1]);
+    for (let i = 0; i < 2; i++) {
+      handMesh[i].position.copy(player.followers[i]);
+      handMesh[i].material.color.setHex(climber.isAnchored(i) ? 0xff5a1f : 0x222222);   // orange = holding on
+    }
     renderer.render(scene, camera);
   }
 
@@ -223,6 +231,7 @@ export async function prepareVR(data) {
         renderer.domElement.style.display = 'block';
         session.addEventListener('end', () => { renderer.setAnimationLoop(null); renderer.domElement.style.display = 'none'; });
         await renderer.xr.setSession(session);
+        renderer.xr.setFoveation(0);   // the projection layer exists now: make sure fixed foveation is off
         resetRig(); player.initializeValues(); lastT = undefined;
         renderer.setAnimationLoop(frame);
       });

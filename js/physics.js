@@ -23,23 +23,23 @@ export class PhysicsWorld {
     this.R = RAPIER;
     this.w = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
     this.w.timestep = 1 / 72;
-    this.slip = new Map();      // collider handle -> slip percentage (Surface override)
+    this.meta = new Map();      // collider handle -> { slip, grip, noClimb } from name modifiers
     this.accum = 0;
   }
 
   // ---- building ----
-  addBox(center, halfExtents, quat, slip) {
+  addBox(center, halfExtents, quat, meta) {
     const d = RAPIER.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z)
       .setTranslation(center.x, center.y, center.z).setRotation(quat).setCollisionGroups(GROUP_ROOM);
-    return this._fixed(d, slip);
+    return this._fixed(d, meta);
   }
-  addTrimesh(vertices, indices, slip) {
+  addTrimesh(vertices, indices, meta) {
     const d = RAPIER.ColliderDesc.trimesh(vertices, indices).setCollisionGroups(GROUP_ROOM);
-    return this._fixed(d, slip);
+    return this._fixed(d, meta);
   }
-  _fixed(desc, slip) {
+  _fixed(desc, meta) {
     const c = this.w.createCollider(desc);
-    if (slip != null) this.slip.set(c.handle, slip);
+    if (meta) this.meta.set(c.handle, meta);
     return c;
   }
   addDynamic(pos, quat, hullPoints) {
@@ -89,10 +89,11 @@ export class PhysicsWorld {
     const ball = new RAPIER.Ball(r), out = [];
     this.w.intersectionsWithShape(c, ID, ball, col => {
       const ct = col.contactShape(ball, c, ID, 0);
-      if (ct && ct.distance < 0) out.push({ n: v3(ct.normal1), pen: -ct.distance });
+      if (ct && ct.distance < 0) out.push({ n: v3(ct.normal1), pen: -ct.distance, col });
       return true;
     }, undefined, GROUP_QUERY);
     return out;
   }
-  slipOf(col) { return col ? this.slip.get(col.handle) : undefined; }
+  slipOf(col) { return col ? this.meta.get(col.handle)?.slip : undefined; }
+  infoOf(col) { return (col && this.meta.get(col.handle)) || {}; }
 }

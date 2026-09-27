@@ -23,6 +23,8 @@ export class GorillaPlayer {
       slideHapticStrength: 0.075, tapCoolDown: 0.15, headRadius: 0.0924, bodyRadius: 0.14, bodyHeight: 0.5,
       fixedDelta: 0.02, gravity: -9.81, disableMovement: false, groundFriction: 2.0,
       // impact SFX: min hand speed into the surface, hand must be off the surface this long / this far to re-arm
+      pinWeight: 3,            // climbing: how strongly a pinned (gripping) hand holds you vs a free Gorilla hand pushing
+      maxFling: 4.5,           // climbing: cap on momentum carried out when you let go
       tapMinImpact: 0.35, tapMaxImpact: 2.5, tapRearmTime: 0.08, tapRearmDistance: 0.03
     }, p);
     this.rig = rig; this.world = world; this.input = input;
@@ -62,6 +64,7 @@ export class GorillaPlayer {
     this.slideNormal = [V(0,1,0), V(0,1,0)]; this.slipPct = [0, 0];
     this.touching = [false, false]; this.lastTap = [0, 0]; this.slipPlaying = [false, false];
     this.didAJump = false; this.didATurn = false;
+    this.pins = this.pins || [null, null];
     this.prevRaw = [this.lastHand[0].clone(), this.lastHand[1].clone()];
     this.handVel = [V(), V()]; this.armed = [true, true]; this.offSince = [0, 0];
     this.contactPoint = [this.lastHand[0].clone(), this.lastHand[1].clone()];
@@ -85,7 +88,7 @@ export class GorillaPlayer {
 
   // Unity Rigidbody stand-in: gravity + head sphere & body capsule collisions.
   physicsStep(dt) {
-    this.vel.y += this.gravity * dt;
+    if (!this.anyPinned()) this.vel.y += this.gravity * dt;
     this.rig.position.addScaledVector(this.vel, dt);
     let grounded = false;
     const resolve = (c, r) => {
@@ -134,7 +137,7 @@ export class GorillaPlayer {
     for (let i = 0; i < 2; i++) { const r = this.currentHandPosition(i); this.handVel[i].copy(r).sub(this.prevRaw[i]).divideScalar(dt || 1e-3); this.prevRaw[i] = r; }
     const pos = this.rig.position, dva = this.denormalizedVelocityAverage, san = this.slideAverageNormal;
 
-    if (!this.didAJump && (this.wasTouching[0] || this.wasTouching[1])) {
+    if (!this.didAJump && !this.anyPinned() && (this.wasTouching[0] || this.wasTouching[1])) {
       pos.addScaledVector(DOWN, 4.9 * dt * dt);
       if (dva.dot(san) <= 0 && DOWN.dot(san) <= 0)
         pos.sub(project(san.clone().multiplyScalar(Math.min(this.stickDepth, project(dva, san).length() * dt)), DOWN));
@@ -146,7 +149,10 @@ export class GorillaPlayer {
 
     const first = [this.firstHandIteration(0), this.firstHandIteration(1)];
     let touchPoints = 0;
-    for (let i = 0; i < 2; i++) if (this.colliding[i] || this.wasTouching[i]) { rigidBodyMovement.add(first[i]); touchPoints++; }
+    for (let i = 0; i < 2; i++) if (this.colliding[i] || this.wasTouching[i]) {
+      const w = this.pins[i] ? this.pinWeight : 1;   // (original: plain average of touching hands)
+      rigidBodyMovement.addScaledVector(first[i], w); touchPoints += w;
+    }
     if (touchPoints) rigidBodyMovement.divideScalar(touchPoints);
 
     const hr = this.headRadius * 0.4;
@@ -166,7 +172,7 @@ export class GorillaPlayer {
 
     this.lastHeadPosition = this.headPos();
     const areBothTouching = (!this.colliding[0] && !this.wasTouching[0]) || (!this.colliding[1] && !this.wasTouching[1]);
-    for (let i = 0; i < 2; i++) this.lastHand[i] = this.finalHandPosition(i, areBothTouching);
+    for (let i = 0; i < 2; i++) this.lastHand[i] = this.pins[i] ? this.pins[i].point.clone() : this.finalHandPosition(i, areBothTouching);
     this.storeVelocities();
     this.didAJump = false;
 
@@ -197,7 +203,7 @@ export class GorillaPlayer {
     }
 
     const D = this.denormalizedVelocityAverage;
-    if ((this.colliding[0] || this.colliding[1]) && !this.disableMovement && !this.didATurn) {
+    if ((this.colliding[0] || this.colliding[1]) && !this.disableMovement && !this.didATurn && !this.anyPinned()) {
       if (this.slide[0] || this.slide[1]) {
         const S = this.slideAverageNormal, pd = project(D, S).length();
         if (pd > this.slideVelocityLimit && D.dot(S) > 0 && pd > project(this.slideAverage, S).length()) {
@@ -211,7 +217,7 @@ export class GorillaPlayer {
     }
 
     for (let i = 0; i < 2; i++) {
-      if (!this.colliding[i]) continue;
+      if (!this.colliding[i] || this.pins[i]) continue;
       const cur = this.currentHandPosition(i), h = this.headPos(), toHand = cur.clone().sub(h);
       if (cur.distanceTo(this.lastHand[i]) > this.unStickDistance && !this.world.raycast(h, norm(toHand), toHand.length())) {
         this.lastHand[i] = cur; this.colliding[i] = false;
@@ -252,7 +258,31 @@ export class GorillaPlayer {
     }
   }
 
+  // ---- grip climbing: a pinned hand is a Gorilla hand locked to a surface point (never slides, never unsticks,
+  //      no gravity sag, no jumps). The free hand keeps full Gorilla physics; both corrections are averaged. ----
+  anyPinned() { return !!(this.pins[0] || this.pins[1]); }
+  pin(i, surfacePoint) {
+    const off = this.currentHandPosition(i).sub(surfacePoint);   // keep the real hand where it is: no snap on attach
+    this.pins[i] = { point: surfacePoint.clone(), offset: off };
+    this.lastHand[i].copy(surfacePoint); this.colliding[i] = this.wasTouching[i] = true; this.slide[i] = false;
+    this.vel.set(0, 0, 0);
+  }
+  unpin(i) {
+    if (!this.pins[i]) return;
+    this.pins[i] = null;
+    if (!this.anyPinned()) {   // let go: carry the climb's momentum (a free hand still on a surface can add a Gorilla push)
+      const v = this.denormalizedVelocityAverage.clone();
+      if (v.length() > this.maxFling) v.setLength(this.maxFling);
+      this.vel.copy(v);
+    }
+  }
+
   firstHandIteration(i) {
+    const pin = this.pins[i];
+    if (pin) {   // target: keep the real hand at (pin point + attach offset)
+      this.colliding[i] = true; this.slide[i] = false; this.slideNormal[i] = V(0, 1, 0); this.slipPct[i] = 0;
+      return pin.point.clone().add(pin.offset).sub(this.currentHandPosition(i));
+    }
     let firstIteration = V();
     const cur = this.currentHandPosition(i), last = this.lastHand[i];
     const distanceTraveled = cur.clone().sub(last);

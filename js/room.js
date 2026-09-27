@@ -5,6 +5,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const HIDDEN = /_Hidden\b|_Hidden_|_Hidden$/i;
 const ICE = /_Ice\b|_Ice_|_Ice$/i;
+const GRIP = /_Grip\b|_Grip_|_Grip$/i, NOCLIMB = /_NoClimb\b|_NoClimb_|_NoClimb$/i;
+const metaFor = name => ({ slip: ICE.test(name) ? 0.99 : undefined, grip: GRIP.test(name), noClimb: NOCLIMB.test(name) });
 
 // World-space grid shader: depth cues on every surface. Used for any material whose name starts with "Grid".
 export const gridMat = (base = new THREE.Color(0xf2f2ef)) => new THREE.ShaderMaterial({
@@ -12,11 +14,13 @@ export const gridMat = (base = new THREE.Color(0xf2f2ef)) => new THREE.ShaderMat
   vertexShader: `varying vec3 vW; varying vec3 vN;
     void main(){ vec4 w = modelMatrix*vec4(position,1.); vW=w.xyz; vN=normalize(mat3(modelMatrix)*normal); gl_Position=projectionMatrix*viewMatrix*w; }`,
   fragmentShader: `uniform vec3 base; uniform vec3 fogCol; varying vec3 vW; varying vec3 vN;
-    float grid(vec2 p){ vec2 g=abs(fract(p-.5)-.5)/fwidth(p); return 1.-min(min(g.x,g.y),1.); }
+    // anti-aliased grid line, faded out where lines get denser than the pixels can show
+    float grid(vec2 p){ vec2 w=fwidth(p); vec2 g=abs(fract(p-.5)-.5)/w; float l=1.-min(min(g.x,g.y),1.);
+      return l*(1.-smoothstep(.2,.45,max(w.x,w.y))); }
     void main(){ vec3 n=abs(vN); vec2 uv = n.y>=max(n.x,n.z) ? vW.xz : (n.x>=n.z ? vW.zy : vW.xy);
-      float major=grid(uv*2.), minor=grid(uv*10.);
+      float major=grid(uv*2.);   // 50 cm lines only: finer lines alias and show resolution seams in the headset
       float shade=.78+.22*max(dot(normalize(vN),normalize(vec3(.4,1.,.3))),0.);
-      vec3 c=base*shade; c=mix(c,vec3(.55),minor*.18); c=mix(c,vec3(.2),major*.5);
+      vec3 c=base*shade; c=mix(c,vec3(.25),major*.45);
       float f=smoothstep(8.,30.,distance(vW,cameraPosition)); gl_FragColor=vec4(mix(c,fogCol,f),1.); }`
 });
 
@@ -36,7 +40,7 @@ function worldTriangles(node) {
 }
 
 // Oriented box from each mesh's local bounds (rotation + scale supported).
-function addBoxes(node, phys, slip) {
+function addBoxes(node, phys, meta) {
   node.updateMatrixWorld(true);
   node.traverse(m => {
     if (!m.isMesh) return;
@@ -46,7 +50,7 @@ function addBoxes(node, phys, slip) {
     m.matrixWorld.decompose(wp, wq, ws);
     const center = c.applyMatrix4(m.matrixWorld);
     const half = V(Math.abs(s.x * ws.x) / 2, Math.abs(s.y * ws.y) / 2, Math.abs(s.z * ws.z) / 2);
-    phys.addBox(center, half, wq, slip);
+    phys.addBox(center, half, wq, meta);
   });
 }
 
@@ -77,12 +81,12 @@ export async function loadRoom(url, scene, phys) {
   const grabNodes = [];
   const walk = node => {
     const name = node.name || '';
-    const slip = ICE.test(name) ? 0.99 : undefined;
+    const meta = metaFor(name);
     if (/^Spawn/i.test(name)) out.spawn = node;
     else if (/^Banner/i.test(name)) out.banner = node;
     else if (/^Card_(\d+)/i.test(name)) out.cards[+name.match(/^Card_(\d+)/i)[1]] = node;
-    if (/^ColBox_/i.test(name)) { addBoxes(node, phys, slip); if (HIDDEN.test(name)) node.visible = false; return; }
-    if (/^Col_/i.test(name)) { const t = worldTriangles(node); if (t.idx.length) phys.addTrimesh(t.verts, t.idx, slip); if (HIDDEN.test(name)) node.visible = false; return; }
+    if (/^ColBox_/i.test(name)) { addBoxes(node, phys, meta); if (HIDDEN.test(name)) node.visible = false; return; }
+    if (/^Col_/i.test(name)) { const t = worldTriangles(node); if (t.idx.length) phys.addTrimesh(t.verts, t.idx, meta); if (HIDDEN.test(name)) node.visible = false; return; }
     if (/^Grab_/i.test(name)) { grabNodes.push(node); return; }
     if (HIDDEN.test(name)) node.visible = false;
     [...node.children].forEach(walk);

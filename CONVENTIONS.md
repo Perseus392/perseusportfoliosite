@@ -22,6 +22,8 @@ Name modifiers (put anywhere after the prefix):
 |---|---|
 | `_Hidden` | Collider only, not drawn. E.g. `Col_Terrain_Hidden` as a simple collision shape over a detailed visual mesh. |
 | `_Ice` | Slippery surface (the ported slide code). Sliding is off unless you use this. |
+| `_Grip` | Grip-climbable from **every** side, including tops: bars, rungs, branches, ledges. |
+| `_NoClimb` | Never grip-climbable (Gorilla movement still works on it). |
 
 - A prefix applies to the **whole object and its children**: a `Col_Rock` parent with 3 child meshes makes 3 mesh colliders.
 - Unity's duplicate suffixes are fine: `ColBox_Pillar (3)` still works.
@@ -35,6 +37,16 @@ Name modifiers (put anywhere after the prefix):
   - `GrabPoint_L` / `GrabPoint_R` = a different pose per hand (falls back to `GrabPoint`)
 - **Collision shape:** a convex hull of the object's meshes (like a Unity convex MeshCollider).
 - Grabbables that fall out of the world respawn where they started.
+
+## Climbing (grip)
+
+- Hold **grip** with an empty hand against a climbable surface: the hand locks on (it turns orange, with a buzz) and moving that hand moves your body. Go hand over hand.
+- Climbing runs **inside** the Gorilla solver: a gripping hand is a Gorilla hand pinned to the wall (no sliding, no gravity), while your other hand keeps full Gorilla physics. Hang with one hand and slap or push the wall with the other to shift yourself; shove and let go to launch off. Letting go of everything keeps your momentum (pull down hard and release to vault up onto a ledge).
+- **Climbable by default:** every `Col_`/`ColBox_` surface steeper than a slope (walls, trunks, rock faces, undersides).
+- **Not climbable by default:** floors and flat tops, which are for Gorilla movement. Add `_Grip` to make the tops climbable too (bars), or `_NoClimb` to turn a wall off.
+- Grabbables win: grip near a grabbable picks it up instead of climbing.
+- Tuning: `reach` and `maxClimbNormalY` in `js/climb.js`; `pinWeight` (how much the gripping hand dominates a pushing free hand; lower = free hand pushes you around more) and `maxFling` at the top of the GorillaPlayer constructor in `js/gorilla.js`.
+- The starter room has a climbing playground behind the spawn (turn around): a jungle gym with a ladder and monkey bars, a 4 m climbing tower, trees with hang-able branches, boulders and a small mountain.
 
 ## Materials
 

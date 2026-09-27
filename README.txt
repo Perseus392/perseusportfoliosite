@@ -9,6 +9,7 @@ FILES
   js/physics.js         Rapier physics (the Unity Physics equivalent)
   js/room.js            reads the room .glb + naming conventions
   js/vr.js              VR mode: cards, hands, grabbing
+  js/climb.js           grip climbing (BotW-style)
   media/                your images and short clips
   CONVENTIONS.md        naming rules + Unity import/export steps
 
@@ -33,4 +34,5 @@ TEST LOCALLY
 
 VR CONTROLS
   Gorilla Tag movement. Right stick = snap turn.
-  Grip = grab / throw. Trigger, A/X, B/Y = interactable actions while holding.
+  Grip = grab / throw objects, or hold grip against a wall to climb (hand turns orange).
+  Trigger, A/X, B/Y = interactable actions while holding.
