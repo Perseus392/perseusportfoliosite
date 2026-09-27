@@ -48,7 +48,7 @@ export async function prepareVR(data) {
   const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.03, 200); rig.add(camera);
 
   const phys = await createPhysics();
-  const room = await loadRoom(`rooms/${roomName}.glb`, scene, phys);
+  const room = await loadRoom(`rooms/${roomName}.glb?v=${window.BUILD || ''}`, scene, phys);
 
   // cards on Card_N markers (readable side faces the marker's +Z)
   room.cards.forEach((marker, i) => {
@@ -59,7 +59,7 @@ export async function prepareVR(data) {
   });
   if (room.banner) {
     const s = room.banner.getWorldScale(V());
-    const tex = cardTexture({ tag: data.role, title: data.name, summary: data.highlight, points: [] }, 2048, 700);
+    const tex = cardTexture({ tag: data.role + (window.BUILD ? '   ·   build ' + window.BUILD : ''), title: data.name, summary: data.highlight, points: [] }, 2048, 700);
     const bm = new THREE.Mesh(new THREE.PlaneGeometry(4.4 * s.x, 1.5 * s.y), new THREE.MeshBasicMaterial({ map: tex }));
     room.banner.getWorldPosition(bm.position); room.banner.getWorldQuaternion(bm.quaternion); scene.add(bm);
   }
@@ -223,6 +223,7 @@ export async function prepareVR(data) {
         renderer.domElement.style.display = 'block';
         session.addEventListener('end', () => { renderer.setAnimationLoop(null); renderer.domElement.style.display = 'none'; });
         await renderer.xr.setSession(session);
+        renderer.xr.setFoveation(0);   // the projection layer exists now: make sure fixed foveation is off
         resetRig(); player.initializeValues(); lastT = undefined;
         renderer.setAnimationLoop(frame);
       });

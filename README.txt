@@ -23,6 +23,10 @@ UPDATING YOUR GITHUB REPO FROM THE OLD VERSION
   Upload everything in this folder, then DELETE the old gorilla.js and vr.js
   from the top level of the repo (they now live in js/).
 
+AFTER CHANGING CODE (js/, interactables/, rooms/)
+  Bump the build number in index.html (window.BUILD and the ?v= numbers in the import map).
+  The page footer and the VR banner show "build N", so you can confirm the headset loaded the new version.
+
 TEST LOCALLY
   In this folder:  npx serve -l 8000   then open http://localhost:8000
   On Quest over USB:  adb reverse tcp:8000 tcp:8000   then open http://localhost:8000 in the Quest browser

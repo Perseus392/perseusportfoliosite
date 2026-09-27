@@ -47,6 +47,7 @@
     <button id="vrBtn">Enter VR</button>
   </header>
   <section class="grid" id="grid"></section>
+  <p id="build" style="color:#aaa;font-size:.75rem;margin-top:32px"></p>
 </main>
 
 <script src="content.js"></script>
@@ -80,7 +81,15 @@
 </script>
 
 <!-- VR: only loads Three.js + physics on devices that support immersive VR (Quest browser) -->
+<!-- BUILD: bump this number (all 7 places below) whenever you push code changes, so headsets don't use cached old files -->
+<script>window.BUILD = '5';</script>
 <script type="importmap">{ "imports": {
+  "./js/vr.js": "./js/vr.js?v=5",
+  "./js/gorilla.js": "./js/gorilla.js?v=5",
+  "./js/physics.js": "./js/physics.js?v=5",
+  "./js/room.js": "./js/room.js?v=5",
+  "./interactables/index.js": "./interactables/index.js?v=5",
+  "./interactables/Example.js": "./interactables/Example.js?v=5",
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
   "@dimforge/rapier3d-compat": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.14.0/rapier.es.js"
@@ -90,7 +99,8 @@
     const btn = document.getElementById('vrBtn');
     btn.style.display = 'inline-block'; btn.disabled = true; btn.textContent = 'Loading VR…';
     try {
-      const { prepareVR } = await import('./js/vr.js');
+      document.getElementById('build').textContent = 'build ' + window.BUILD;
+    const { prepareVR } = await import('./js/vr.js');
       const vr = await prepareVR(window.PORTFOLIO);
       btn.disabled = false; btn.textContent = 'Enter VR';
       btn.onclick = () => vr.start().catch(e => { console.error(e); alert('Could not start VR: ' + e.message); });
